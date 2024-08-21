@@ -108,9 +108,49 @@ function M.write_string_at_cursor(str)
 end
 
 -- Add this new function
-function M.get_input_from_prompt()
-  local input = vim.fn.input('Enter instruction: ')
-  return input
+function M.get_input_from_popup()
+  local Input = require("nui.input")
+  local event = require("nui.utils.autocmd").event
+
+  local input = Input({
+    position = "50%",
+    size = {
+      width = 60,
+    },
+    border = {
+      style = "single",
+      text = {
+        top = "Enter instruction",
+        top_align = "center",
+      },
+    },
+    win_options = {
+      winhighlight = "Normal:Normal,FloatBorder:Normal",
+    },
+  }, {
+    prompt = "> ",
+    default_value = "",
+    on_close = function()
+      print("Input cancelled")
+    end,
+    on_submit = function(value)
+      M.last_input = value
+    end,
+  })
+
+  input:mount()
+
+  input:on(event.BufLeave, function()
+    input:unmount()
+  end)
+
+  vim.wait(30000, function()
+    return M.last_input ~= nil
+  end, 100)
+
+  local result = M.last_input
+  M.last_input = nil
+  return result
 end
 
 -- Modify the existing function
@@ -119,8 +159,8 @@ local function get_prompt(opts)
   local visual_lines = M.get_visual_selection()
   local prompt = ''
 
-  if opts.use_input then
-    prompt = M.get_input_from_prompt()
+  if opts.use_popup then
+    prompt = M.get_input_from_popup()
   elseif visual_lines then
     prompt = table.concat(visual_lines, '\n')
     if replace then
