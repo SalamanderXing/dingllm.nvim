@@ -107,12 +107,21 @@ function M.write_string_at_cursor(str)
   end)
 end
 
+-- Add this new function
+function M.get_input_from_prompt()
+  local input = vim.fn.input('Enter instruction: ')
+  return input
+end
+
+-- Modify the existing function
 local function get_prompt(opts)
   local replace = opts.replace
   local visual_lines = M.get_visual_selection()
   local prompt = ''
 
-  if visual_lines then
+  if opts.use_input then
+    prompt = M.get_input_from_prompt()
+  elseif visual_lines then
     prompt = table.concat(visual_lines, '\n')
     if replace then
       vim.api.nvim_command 'normal! d'
