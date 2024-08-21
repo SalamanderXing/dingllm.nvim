@@ -111,6 +111,8 @@ function M.get_input_from_popup()
   local Input = require("nui.input")
   local event = require("nui.utils.autocmd").event
 
+  local input_result = nil
+
   local input = Input({
     position = "50%",
     size = {
@@ -131,9 +133,10 @@ function M.get_input_from_popup()
     default_value = "",
     on_close = function()
       print("Input cancelled")
+      input_result = nil
     end,
     on_submit = function(value)
-      M.last_input = value
+      input_result = value
     end,
   })
 
@@ -144,68 +147,24 @@ function M.get_input_from_popup()
   end)
 
   vim.wait(30000, function()
-    return M.last_input ~= nil
+    return input_result ~= nil
   end, 100)
 
-  local result = M.last_input
-  M.last_input = nil
-  return result
+  return input_result
 end
-
--- Modify the existing function
-local function get_prompt(opts)
-  local replace = opts.replace
-  local visual_lines = M.get_visual_selection()
-  local prompt = ''
-
-  if opts.use_popup then
-    prompt = M.get_input_from_popup()
-  elseif visual_lines then
-    prompt = table.concat(visual_lines, '\n')
-    if replace then
-      vim.api.nvim_command 'normal! d'
-      vim.api.nvim_command 'normal! k'
-    else
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', false, true, true), 'nx', false)
-    end
-  else
-    prompt = M.get_lines_until_cursor()
-  end
-
-  return prompt
-end
-
-function M.handle_anthropic_spec_data(data_stream, event_state)
-  if event_state == 'content_block_delta' then
-    local json = vim.json.decode(data_stream)
-    if json.delta and json.delta.text then
-      M.write_string_at_cursor(json.delta.text)
-    end
-  end
-end
-
-function M.handle_openai_spec_data(data_stream)
-  if data_stream:match '"delta":' then
-    local json = vim.json.decode(data_stream)
-    if json.choices and json.choices[1] and json.choices[1].delta then
-      local content = json.choices[1].delta.content
-      if content then
-        M.write_string_at_cursor(content)
-      end
-    end
-  end
-end
-
-local group = vim.api.nvim_create_augroup('DING_LLM_AutoGroup', { clear = true })
-local active_job = nil
 
 function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_data_fn)
-  vim.api.nvim_clear_autocmds { group = group }
-  local prompt = get_prompt(opts)
-  if prompt == '' then
-    print("No input provided. Cancelling LLM invocation.")
-    return
+  local prompt
+  if opts.use_popup then
+    prompt = M.get_input_from_popup()
+    if not prompt then
+      print("No input provided. Cancelling LLM invocation.")
+      return
+    end
+  else
+    prompt = get_prompt(opts)
   end
+
   local system_prompt = opts.system_prompt or 'You are a tsundere uwu anime. Yell at me for not setting my configuration for my llm plugin correctly'
   local args = make_curl_args_fn(opts, prompt, system_prompt)
   local curr_event_state = nil
@@ -256,5 +215,29 @@ function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_dat
   vim.api.nvim_set_keymap('n', '<Esc>', ':doautocmd User DING_LLM_Escape<CR>', { noremap = true, silent = true })
   return active_job
 end
+
+function M.handle_anthropic_spec_data(data_stream, event_state)
+  if event_state == 'content_block_delta' then
+    local json = vim.json.decode(data_stream)
+    if json.delta and json.delta.text then
+      M.write_string_at_cursor(json.delta.text)
+    end
+  end
+end
+
+function M.handle_openai_spec_data(data_stream)
+  if data_stream:match '"delta":' then
+    local json = vim.json.decode(data_stream)
+    if json.choices and json.choices[1] and json.choices[1].delta then
+      local content = json.choices[1].delta.content
+      if content then
+        M.write_string_at_cursor(content)
+      end
+    end
+  end
+end
+
+local group = vim.api.nvim_create_augroup('DING_LLM_AutoGroup', { clear = true })
+local active_job = nil
 
 return M
