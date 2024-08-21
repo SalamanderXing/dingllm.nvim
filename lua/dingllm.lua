@@ -107,7 +107,6 @@ function M.write_string_at_cursor(str)
   end)
 end
 
--- Add this new function
 function M.get_input_from_popup()
   local Input = require("nui.input")
   local event = require("nui.utils.autocmd").event
@@ -203,6 +202,10 @@ local active_job = nil
 function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_data_fn)
   vim.api.nvim_clear_autocmds { group = group }
   local prompt = get_prompt(opts)
+  if prompt == '' then
+    print("No input provided. Cancelling LLM invocation.")
+    return
+  end
   local system_prompt = opts.system_prompt or 'You are a tsundere uwu anime. Yell at me for not setting my configuration for my llm plugin correctly'
   local args = make_curl_args_fn(opts, prompt, system_prompt)
   local curr_event_state = nil
